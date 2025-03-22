@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.annotation.PostConstruct;
+
 @Component
 public class RuntimeConfig {
     private Logger log = LoggerFactory.getLogger(this.getClass());
@@ -33,18 +35,19 @@ public class RuntimeConfig {
         this.objectMapper = objectMapper;
     }
     
-    public String get(String name) {
-        if (configNode == null) {
-            try {
-                Path filename = Paths.get(configPath, serviceName + "Config.json");
-                String json = new String(Files.readAllBytes(filename));
-                ObjectMapper objectMapper = new ObjectMapper();
-                JsonNode rootNode = objectMapper.readTree(json);
-                configNode = rootNode.path("config");                
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
+    @PostConstruct
+    public void init() {
+        try {
+            Path filename = Paths.get(configPath, serviceName + "Config.json");
+            String json = new String(Files.readAllBytes(filename));
+            JsonNode rootNode = objectMapper.readTree(json);
+            configNode = rootNode.path("config");                
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
         }
+    }
+    
+    public String get(String name) {
         return configNode.has(name) ? configNode.get(name).asText() : null;        
     }
 }

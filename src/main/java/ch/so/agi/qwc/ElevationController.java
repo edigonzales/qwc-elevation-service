@@ -21,11 +21,9 @@ import org.slf4j.LoggerFactory;
 public class ElevationController {
     private Logger log = LoggerFactory.getLogger(this.getClass());
 
-    private ObjectMapper objectMapper;
     private ElevationService elevationService;
     
-    public ElevationController(ObjectMapper objectMapper, ElevationService elevationService) {
-        this.objectMapper = objectMapper;
+    public ElevationController(ElevationService elevationService) {
         this.elevationService = elevationService;
     }
 
@@ -53,6 +51,6 @@ public class ElevationController {
                 
         double height = elevationService.getElevationByXY(x, y, crs);
         
-        return new ResponseEntity<Map>(Map.of("elevation", height), HttpStatus.OK);        
+        return new ResponseEntity<Map<String,Double>>(Map.of("elevation", height), HttpStatus.OK);        
     }
 }
