@@ -1,0 +1,47 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.4'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'ch.so.agi'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+ext {
+    geotoolsVersion = '32.2'
+    imageioVersion = '1.4.14'
+}
+
+repositories {
+    maven { url "https://maven.geo-solutions.it/" }
+    maven { url "https://repo.osgeo.org/repository/release/" }
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    
+    implementation "org.geotools:gt-main:${geotoolsVersion}"
+    implementation "org.geotools:gt-geotiff:${geotoolsVersion}"
+    implementation "org.geotools:gt-epsg-hsql:${geotoolsVersion}"
+    implementation "it.geosolutions.imageio-ext:imageio-ext-cog-reader:${imageioVersion}"
+    implementation "it.geosolutions.imageio-ext:imageio-ext-cog-rangereader-http:${imageioVersion}"
+    
+    implementation "javax.media:jai_core:1.1.3"
+    implementation "javax.media:jai_imageio:1.1"
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

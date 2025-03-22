@@ -1,0 +1,7 @@
+{
+  "$schema": "https://github.com/qwc-services/qwc-elevation-service/raw/master/schemas/qwc-elevation-service.json",
+  "service": "elevation",
+  "config": {
+    "elevation_dataset": "src/test/data/swissalti3d.tif"
+  }
+}
