@@ -9,9 +9,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
@@ -75,5 +72,4 @@ public class ElevationController {
         
         return ResponseEntity.ok(Map.of("elevations", elevations));
     }
-
 }

@@ -3,8 +3,6 @@ package ch.so.agi.qwc;
 import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.IOException;
-import java.io.StringReader;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
