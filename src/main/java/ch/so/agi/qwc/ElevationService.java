@@ -87,6 +87,8 @@ public class ElevationService {
     }
     
     public List<Double> getElevationsByLinestring(String requestData) throws IOException {
+        // TODO CRS wird ignoriert
+        
         Map<String, Object> query = parseJsonString(requestData);
 
         List<List<Double>> coordinates = (List<List<Double>>) query.get("coordinates");
