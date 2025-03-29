@@ -3,15 +3,21 @@ package ch.so.agi.qwc;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -53,4 +59,19 @@ public class ElevationController {
         
         return new ResponseEntity<Map<String,Double>>(Map.of("elevation", height), HttpStatus.OK);        
     }
+    
+    @PostMapping("/getheightprofile")
+    public ResponseEntity<?> getHeightProfile(@RequestBody String requestData) throws IOException {
+        /* Entweder JsonNode oder String. Bei JsonNode muss der korrekte Header mitgeliefert werden. 
+         * -H 'Content-Type: application/json'
+         * Und mit String wird requestData html encoded.
+         * Ich weiss nocht nicht ganz genau, was WGC macht.
+         */
+
+        String decodedBody = URLDecoder.decode(requestData, StandardCharsets.UTF_8);
+        List<Double> elevations = elevationService.getElevationsByLinestring(decodedBody);
+        
+        return new ResponseEntity<Map<String, List<Double>>>(Map.of("elevations", elevations), HttpStatus.OK);  
+    }
+
 }

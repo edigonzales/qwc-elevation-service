@@ -3,7 +3,14 @@ package ch.so.agi.qwc;
 import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
 
 import org.geotools.api.coverage.PointOutsideCoverageException;
 import org.geotools.api.referencing.FactoryException;
@@ -22,10 +29,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import it.geosolutions.imageio.core.BasicAuthURI;
+import it.geosolutions.imageio.plugins.cog.CogImageReadParam;
+import it.geosolutions.imageioimpl.plugins.cog.CogImageInputStreamSpi;
+import it.geosolutions.imageioimpl.plugins.cog.CogImageReaderSpi;
+import it.geosolutions.imageioimpl.plugins.cog.CogSourceSPIProvider;
+import it.geosolutions.imageioimpl.plugins.cog.HttpRangeReader;
+import jakarta.annotation.PostConstruct;
+
 @Service
 public class ElevationService {
     private Logger log = LoggerFactory.getLogger(this.getClass());
 
+    private ObjectMapper objectMapper;
     private RuntimeConfig runtimeConfig;
     
     private GridCoverage2D coverage;
@@ -33,30 +54,96 @@ public class ElevationService {
     
     private GeometryFactory geometryFactory =  new GeometryFactory();
     
-    public ElevationService(RuntimeConfig runtimeConfig) {
+    public ElevationService(ObjectMapper objectMapper, RuntimeConfig runtimeConfig) {
+        this.objectMapper = objectMapper;
         this.runtimeConfig = runtimeConfig;
     }
     
-    public double getElevationByXY(double x, double y, String crs) throws IOException {
-    
-        //String elevationDataset = "/Users/stefan/Downloads/ch.so.agi.lidar_2014.dtm.tif";
-        //String elevationDataset = "https://files.geo.so.ch/ch.so.agi.lidar_2014.dtm/aktuell/ch.so.agi.lidar_2014.dtm.tif)";
-        
+    @PostConstruct
+    private void init() throws IOException {
         String elevationDataset = runtimeConfig.get("elevation_dataset");
         log.debug("elevationDataset: {}", elevationDataset);
 
-        if (coverage == null) {
-            GeoTiffReader reader;
-            if (elevationDataset.startsWith("http")) {
-                reader = new GeoTiffReader(new File(elevationDataset));
-            } else {
-                reader = new GeoTiffReader(new File(elevationDataset));
-            }            
-            coverage = reader.read(null);
-            rasterCRS = reader.getCoordinateReferenceSystem();
-            log.debug("rasterCRS: {}", rasterCRS);
+        GeoTiffReader reader;
+        if (elevationDataset.startsWith("http")) {
+            BasicAuthURI cogUri = new BasicAuthURI(elevationDataset, false);
+            HttpRangeReader rangeReader = new HttpRangeReader(cogUri.getUri(), CogImageReadParam.DEFAULT_HEADER_LENGTH);
+            
+            CogSourceSPIProvider input = new CogSourceSPIProvider(
+                    cogUri,
+                    new CogImageReaderSpi(),
+                    new CogImageInputStreamSpi(),
+                    rangeReader.getClass().getName());
+
+            reader = new GeoTiffReader(input);
+            log.info("using local geotiff file");
+        } else {
+            reader = new GeoTiffReader(new File(elevationDataset));
+            log.info("using remote geotiff file");
+        }            
+        coverage = reader.read(null);
+        rasterCRS = reader.getCoordinateReferenceSystem();
+        log.debug("rasterCRS: {}", rasterCRS);
+    }
+    
+    public List<Double> getElevationsByLinestring(String requestData) throws IOException {
+        Map<String, Object> query = parseJsonString(requestData);
+
+        List<List<Double>> coordinates = (List<List<Double>>) query.get("coordinates");
+        List<Double> distances = (List<Double>) query.get("distances");
+        List<Double> elevations = new ArrayList<>();
+        int numSamples = (int) query.get("samples");
+        
+        // Compute cumulative distances
+        List<Double> cumDistances = new ArrayList<>();
+        cumDistances.add(0.0);
+        IntStream.range(0, distances.size()).forEach(i -> cumDistances.add(cumDistances.get(i) + distances.get(i)));
+        double totDistance = distances.stream().mapToDouble(Double::doubleValue).sum();
+
+        // Initialize tracking variables
+        double x = 0;
+        int i = 0;
+        double[] p1 = {coordinates.get(i).get(0), coordinates.get(i).get(1)};
+        double[] p2 = {coordinates.get(i + 1).get(0), coordinates.get(i + 1).get(1)};
+        double[] dr = {p2[0] - p1[0], p2[1] - p1[1]};
+
+        for (int s = 0; s < numSamples; s++) {
+            // Find correct segment for current x
+            while (i + 2 < cumDistances.size() && x > cumDistances.get(i + 1)) {
+                i++;
+                p1 = new double[]{coordinates.get(i).get(0), coordinates.get(i).get(1)};
+                p2 = new double[]{coordinates.get(i + 1).get(0), coordinates.get(i + 1).get(1)};
+                dr = new double[]{p2[0] - p1[0], p2[1] - p1[1]};
+            }
+
+            // Compute interpolation fraction
+            double mu = 0;
+            try {
+                mu = (x - cumDistances.get(i)) / (cumDistances.get(i + 1) - cumDistances.get(i));
+            } catch (ArithmeticException e) {
+                mu = 0;
+            }
+
+            // Transform interpolated point
+            double interpX = p1[0] + mu * dr[0];
+            double interpY = p1[1] + mu * dr[1];
+
+            try {
+                Point2D.Double pos = new Point2D.Double(interpX, interpY);
+                double[] height = new double[1];
+                coverage.evaluate(pos, height);
+                elevations.add(height[0]);
+            } catch (PointOutsideCoverageException e) {
+                elevations.add(0.0);
+            }
+                      
+            x += totDistance / (numSamples - 1);
         }
         
+        return elevations;
+    }
+    
+    public double getElevationByXY(double x, double y, String crs) throws IOException {                
         try {
             CoordinateReferenceSystem inputCRS = CRS.decode("EPSG:"+crs);
             log.debug("inputCRS: {}", inputCRS);
@@ -83,4 +170,40 @@ public class ElevationService {
         }
     }
     
+    private Map<String, Object> parseJsonString(String jsonString) throws JsonMappingException, JsonProcessingException {
+        JsonNode rootNode = objectMapper.readTree(jsonString);
+
+        // Extract coordinates
+        List<List<Double>> coordinates = new ArrayList<>();
+        JsonNode coordinatesArray = rootNode.get("coordinates");
+        if (coordinatesArray != null && coordinatesArray.isArray()) {
+            for (JsonNode point : coordinatesArray) {
+                if (point.isArray() && point.size() == 2) {
+                    coordinates.add(Arrays.asList(point.get(0).asDouble(), point.get(1).asDouble()));
+                }
+            }
+        }
+
+        // Extract distances
+        List<Double> distances = new ArrayList<>();
+        JsonNode distancesArray = rootNode.get("distances");
+        if (distancesArray != null && distancesArray.isArray()) {
+            for (JsonNode distance : distancesArray) {
+                distances.add(distance.asDouble());
+            }
+        }
+
+        // Extract other fields
+        String projection = rootNode.has("projection") ? rootNode.get("projection").asText() : "";
+        int samples = rootNode.has("samples") ? rootNode.get("samples").asInt() : 0;
+
+        // Store in a map
+        Map<String, Object> query = new HashMap<>();
+        query.put("coordinates", coordinates);
+        query.put("distances", distances);
+        query.put("projection", projection);
+        query.put("samples", samples);
+
+        return query;
+    }
 }
