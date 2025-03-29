@@ -54,10 +54,12 @@ public class ElevationController {
         String[] posArray = pos.split(",");
         double x = Double.valueOf(posArray[0]);
         double y = Double.valueOf(posArray[1]);
-                
-        double height = elevationService.getElevationByXY(x, y, crs);
+        String[] crsArray = crs.split(":");
+        String crsString = crsArray[1];
+
+        double height = elevationService.getElevationByXY(x, y, crsString);
         
-        return new ResponseEntity<Map<String,Double>>(Map.of("elevation", height), HttpStatus.OK);        
+        return ResponseEntity.ok(Map.of("elevation", height));
     }
     
     @PostMapping("/getheightprofile")
@@ -71,7 +73,7 @@ public class ElevationController {
         String decodedBody = URLDecoder.decode(requestData, StandardCharsets.UTF_8);
         List<Double> elevations = elevationService.getElevationsByLinestring(decodedBody);
         
-        return new ResponseEntity<Map<String, List<Double>>>(Map.of("elevations", elevations), HttpStatus.OK);  
+        return ResponseEntity.ok(Map.of("elevations", elevations));
     }
 
 }

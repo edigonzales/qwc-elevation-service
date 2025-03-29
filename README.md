@@ -2,6 +2,4 @@
 
 ## todo 
 
-- cog
 - testing
-- getElevationByLinestring
